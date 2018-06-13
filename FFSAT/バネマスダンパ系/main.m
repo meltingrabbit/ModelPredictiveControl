@@ -50,10 +50,10 @@ Q = eye(sizeX);
 Qf= Q;			% ÅŒã‚à“Á‚Éd‚İ‚ğ•Ï‚¦‚È‚¢
 % R = zeros(sizeU,sizeU);
 R = eye(sizeU);
-x_min = [-inf; -inf];
-x_max = repmat( inf, [sizeX, 1]);
+x_min = [-inf; -10];
+x_max = [ inf;  inf];
 u_min = [-2];
-u_max = repmat( inf, [sizeX, 1]);
+u_max = [20];
 
 
 % Œ‹‰ÊŠi”[”z—ñ

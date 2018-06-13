@@ -177,7 +177,7 @@ function [flag, NX, NU, cQ, cR, Psi, Ups, Theta, F, f, G, g, BlockF] ...
 
 	% BlockF
 	temp = zeros(2*NU*Hu, NU);
-	for i = 1:Hu
+	for i = Hu:-1:1
 		temp = temp + F(:, NU*(i-1)+1:NU*i);
 		BlockF(:, NU*(i-1)+1:NU*i) = temp;
 	end
