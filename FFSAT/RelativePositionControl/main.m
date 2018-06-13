@@ -78,8 +78,8 @@ B = BlkdiagNTime(HillB, Ffsat.Sat.MirSat.NUM+1);
 
 %% 無制御でルンゲクッタ回す
 t0 = 0;
-% tn = 100000;
-tn = 1000;
+tn = 100000;
+% tn = 1000;
 dt = 10;
 vt = t0:dt:tn;
 count = 0;
@@ -103,7 +103,8 @@ Hp = 10;
 Hu = 10;
 Q = eye(sizeX);
 Qf= Q;			% 最後も特に重みを変えない
-R = zeros(sizeU,sizeU);
+% R = zeros(sizeU,sizeU);
+R = eye(sizeU);
 x_min = repmat(-inf, [sizeX, 1]);
 x_max = repmat( inf, [sizeX, 1]);
 u_min = repmat(   0, [sizeX, 1]);
@@ -129,7 +130,6 @@ for t = vt
 	% MPC
 	if rem(count, INTERVAL_MPC) == 0
 		u = MPC(x, u, Ad, Bd, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max);
-
 	end
 
 	% LOG
