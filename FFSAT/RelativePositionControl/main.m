@@ -41,8 +41,8 @@ Ffsat.Sat.ImgSat.MASS    = 50.0;			% 撮像衛星質量 [kg]
 Ffsat.Sat.ImgSat.x       = [0;0;0];			% 位置（基準中心位置からのズレ） [m]
 Ffsat.Sat.ImgSat.v       = [0;0;0];			% 速度（基準中心の相対速度） [m/s]
 % スラスタ
-Ffsat.Sat.MirSat.MAX_THRUST = 5.0e-6;				% 各軸最大推力 [N]
-Ffsat.Sat.ImgSat.MAX_THRUST = 5.0e-5;				% 各軸最大推力 [N]
+Ffsat.Sat.MirSat.MAX_THRUST = 1.0e-3;				% 各軸最大推力 [N]
+Ffsat.Sat.ImgSat.MAX_THRUST = 1.0e-3;				% 各軸最大推力 [N]
 % 外乱
 Ffsat.Dist.C22           = @CalcDistC22;		% GEOポテンシャル経度方向外乱
 Ffsat.Dist.Srp           = @CalcSrp;			% 太陽輻射圧
@@ -75,20 +75,33 @@ B = BlkdiagNTime(HillB, Ffsat.Sat.MirSat.NUM+1);
 % end
 
 
+%% 相対位置LOG用
+L_ImgMir = CalcDistance(Ffsat.Sat.MirSat.x{1}, Ffsat.Sat.ImgSat.x);				% 撮像衛星-鏡衛星間距離
+L_MirSid = CalcDistance(Ffsat.Sat.MirSat.x{1}, Ffsat.Sat.MirSat.x{2});			% 隣り合った鏡衛星間距離
+L_MirOpp = CalcDistance(Ffsat.Sat.MirSat.x{1}, Ffsat.Sat.MirSat.x{4});			% 向かい合った鏡衛星間距離
+
+
+%% 乱数
+SEED = 1;
+rng(SEED);			% 乱数設定
+
 
 %% 無制御でルンゲクッタ回す
 t0 = 0;
-tn = 100000;
-% tn = 1000;
-dt = 10;
+% tn = 10000;
+% % tn = 1000;
+% dt = 10;
+tn = 1000;
+dt = 1;
 vt = t0:dt:tn;
 count = 0;
 countLog = 0;
 % FORMAT_SPEC_LOG = strcat(repmat('%8e\t' , [1,sizeX+1]) , '\r\n');
-FORMAT_SPEC_LOG = strcat(repmat('%f\t' , [1,sizeX+1]) , '\r\n');
+% FORMAT_SPEC_LOG = strcat(repmat('%f\t' , [1,sizeX+1]) , '\r\n');
 % INTERVAL_LOG = 100;
-INTERVAL_LOG = 10;
+INTERVAL_LOG = 1;
 INTERVAL_MPC = 10;
+
 
 
 % 状態空間モデル
@@ -103,17 +116,31 @@ Hp = 10;
 Hu = 10;
 Q = eye(sizeX);
 Qf= Q;			% 最後も特に重みを変えない
-% R = zeros(sizeU,sizeU);
-R = eye(sizeU);
-x_min = repmat(-inf, [sizeX, 1]);
+R = zeros(sizeU,sizeU);
+% R = eye(sizeU);
 x_max = repmat( inf, [sizeX, 1]);
-u_min = repmat(   0, [sizeX, 1]);
+x_min = repmat(-inf, [sizeX, 1]);
 u_max = repmat( Ffsat.Sat.MirSat.MAX_THRUST / Ffsat.Sat.MirSat.MASS, [sizeX, 1]);
 u_max(1:3) = repmat( Ffsat.Sat.ImgSat.MAX_THRUST / Ffsat.Sat.ImgSat.MASS, [3, 1]);
+% u_max = repmat( inf, [sizeX, 1]);
+u_min = -u_max;
+
 
 
 % 結果格納配列
-output_tx = zeros(floor(length(vt) / INTERVAL_LOG)+1 , sizeX+1);
+if INTERVAL_LOG == 1
+	output_tx  = zeros(floor(length(vt) / INTERVAL_LOG) , sizeX+1);
+	output_tu  = zeros(floor(length(vt) / INTERVAL_LOG) , sizeU+1);
+	% output_err = zeros(floor(length(vt) / INTERVAL_LOG) , 8+1);
+	output_err = zeros(floor(length(vt) / INTERVAL_LOG) , Ffsat.Sat.MirSat.NUM+1+1);
+	output_errAll = zeros(floor(length(vt) / INTERVAL_LOG) , (Ffsat.Sat.MirSat.NUM+1)*4+1);
+else
+	output_tx  = zeros(floor(length(vt) / INTERVAL_LOG)+1 , sizeX+1);
+	output_tu  = zeros(floor(length(vt) / INTERVAL_LOG)+1 , sizeU+1);
+	% output_err = zeros(floor(length(vt) / INTERVAL_LOG)+1 , 8+1);
+	output_err = zeros(floor(length(vt) / INTERVAL_LOG)+1 , Ffsat.Sat.MirSat.NUM+1+1);
+	output_errAll = zeros(floor(length(vt) / INTERVAL_LOG)+1 , (Ffsat.Sat.MirSat.NUM+1)*4+1);
+end
 % ルンゲクッタ
 for t = vt
 	% 外乱
@@ -122,21 +149,34 @@ for t = vt
 		d( (i-1)*3+1:i*3 ) = Ffsat.Dist.C22() + Ffsat.Dist.Srp(Orbit, Constant, t, 0.6, 0.25, Ffsat.Sat.MirSat.MASS) + Ffsat.Dist.ThirdBody(Orbit, Constant, x((i-1)*6+1:i*6-3), t);
 
 		% 確認用
-		% aa = Ffsat.Dist.C22();
-		% ab = Ffsat.Dist.Srp(Orbit, Constant, t, 0.6, 0.25, Ffsat.Sat.MirSat.MASS);
-		% ac = Ffsat.Dist.ThirdBody(Orbit, Constant, x((i-1)*6+1:i*6-3), t);
+		aa = Ffsat.Dist.C22();
+		ab = Ffsat.Dist.Srp(Orbit, Constant, t, 0.6, 0.25, Ffsat.Sat.MirSat.MASS);
+		ac = Ffsat.Dist.ThirdBody(Orbit, Constant, x((i-1)*6+1:i*6-3), t);
+		na = norm(aa);
+		nb = norm(ab);
+		nc = norm(ac);
+		aImg = HillA*x(1:6,:);
+		aMir = HillA*x(13:18,:);
+		nImg = norm(aImg(4:6,:));
+		nMir = norm(aMir(4:6,:));
 	end
 
 	% MPC
 	if rem(count, INTERVAL_MPC) == 0
 		u = MPC(x, u, Ad, Bd, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max);
+		t
 	end
 
 	% LOG
 	if rem(count, INTERVAL_LOG) == 0
 		countLog = countLog + 1;
-		output_tx(countLog, :) = horzcat(t, x.');
+		output_tx (countLog, :) = horzcat(t, x.');
+		output_tu (countLog, :) = horzcat(t, u.');
+		% output_err(countLog, :) = horzcat(t, GetRelPosErr(x, L_ImgMir, L_MirSid, L_MirOpp).');
+		output_err(countLog, :) = horzcat(t, GetAbsPosErr(x, r).');
+		output_errAll(countLog, :) = horzcat(t, GetAbsPosErrAll(x, r).');
 		% OutputFfsatPos_fromX(strcat('./output/3Dpos/pos_', sprintf('%d', t) , '.dat'), x);
+		% t
 	end
 	count = count + 1;
 
@@ -144,7 +184,14 @@ for t = vt
 	x = x + dx;
 end
 
-Output2dArr('./output/tx.dat', output_tx, FORMAT_SPEC_LOG);
+[tmp, outputSize] = size(output_tx);
+Output2dArr('./output/tx.dat', output_tx, strcat(repmat('%8e\t' , [1,outputSize]) , '\r\n'));
+[tmp, outputSize] = size(output_tu);
+Output2dArr('./output/tu.dat', output_tu, strcat(repmat('%8e\t' , [1,outputSize]) , '\r\n'));
+[tmp, outputSize] = size(output_err);
+Output2dArr('./output/err.dat', output_err, strcat(repmat('%8e\t' , [1,outputSize]) , '\r\n'));
+[tmp, outputSize] = size(output_errAll);
+Output2dArr('./output/errAll.dat', output_errAll, strcat(repmat('%8e\t' , [1,outputSize]) , '\r\n'));
 
 % OutputFfsatPos(Ffsat, 'FfsatPos.dat');
 
@@ -231,3 +278,61 @@ end
 
 
 
+%% LOGのための関数
+function e = GetRelPosErr(x, L_ImgMir, L_MirSid, L_MirOpp)
+	% 相対位置誤差配列を返す．
+	% Mir1-IMG, Mir1-Mir2, Mir1-Mir6, Mir1-Mir4, Mir3-IMG, Mir3-Mir4, Mir3-Mir2, Mir3-Mir6
+
+
+	MIR_SAT_NUM = 6;
+	e = zeros(4*2, 1);
+
+	% IMG1, 3
+	idx = 0;
+	for i = [1,3]
+		e(idx + 1) = CalcDistance(x(1:3), x(6*i+1:6*i+3)) - L_ImgMir;
+		j = rem(i+1,MIR_SAT_NUM);
+		if j==0
+			j = MIR_SAT_NUM;
+		end
+		e(idx + 2) = CalcDistance(x(6*i+1:6*i+3), x(6*j+1:6*j+3)) - L_MirSid;
+		j = rem(i-1,MIR_SAT_NUM);
+		if j==0
+			j = MIR_SAT_NUM;
+		end
+		e(idx + 3) = CalcDistance(x(6*i+1:6*i+3), x(6*j+1:6*j+3)) - L_MirSid;
+		j = rem(i+3,MIR_SAT_NUM);
+		if j==0
+			j = MIR_SAT_NUM;
+		end
+		e(idx + 4) = CalcDistance(x(6*i+1:6*i+3), x(6*j+1:6*j+3)) - L_MirOpp;
+		idx = idx + 4;
+	end
+end
+
+function e = GetAbsPosErr(x, r)
+	% 絶対位置誤差配列を返す．
+
+	MIR_SAT_NUM = 6;
+	e = zeros(MIR_SAT_NUM+1, 1);
+
+	for i = 1:(MIR_SAT_NUM+1)
+		e(i) = CalcDistance(x(6*(i-1)+1:6*(i-1)+3), r(6*(i-1)+1:6*(i-1)+3));
+	end
+end
+
+function e = GetAbsPosErrAll(x, r)
+	% 絶対位置誤差配列を返す．
+
+	MIR_SAT_NUM = 6;
+	e = zeros(MIR_SAT_NUM+1, 1);
+
+	idx = 0;
+	for i = 1:(MIR_SAT_NUM+1)
+		e(idx+1) = CalcDistance(x(6*(i-1)+1:6*(i-1)+3), r(6*(i-1)+1:6*(i-1)+3));
+		e(idx+2) = x(6*(i-1)+1) - r(6*(i-1)+1);
+		e(idx+3) = x(6*(i-1)+2) - r(6*(i-1)+2);
+		e(idx+4) = x(6*(i-1)+3) - r(6*(i-1)+3);
+		idx = idx + 4;
+	end
+end

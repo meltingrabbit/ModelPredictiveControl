@@ -81,7 +81,8 @@ function u = MPC(x, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
 	% これつけないと，quadprogで
 	% 警告: ヘッシアンが対称ではありません。H=(H+H')/2 をリセットしています。
 	% って出てくる．
-	cH = round(cH, 10, 'significant');
+	% cH = round(cH, 10, 'significant');
+	cH = round(cH, 8, 'significant');
 
 	%% 最適化．二次計画法
 	opts = optimoptions(@quadprog,'Display','off');

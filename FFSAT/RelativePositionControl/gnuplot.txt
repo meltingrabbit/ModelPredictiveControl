@@ -1,0 +1,6 @@
+
+set ticslevel 0
+set view equal xyz
+
+splot "FfsatPos.dat" w l ti ""
+
