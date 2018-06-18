@@ -126,6 +126,8 @@ u_max(1:3) = repmat( Ffsat.Sat.ImgSat.MAX_THRUST / Ffsat.Sat.ImgSat.MASS, [3, 1]
 u_min = -u_max;
 
 
+x_hat = x;		% 初回のMPCは，前回の予想がないので今の値
+
 
 % 結果格納配列
 if INTERVAL_LOG == 1
@@ -163,7 +165,7 @@ for t = vt
 
 	% MPC
 	if rem(count, INTERVAL_MPC) == 0
-		u = MPC(x, u, Ad, Bd, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max);
+		[u, x_hat] = MPC(x, x_hat, u, Ad, Bd, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max);
 		t
 	end
 

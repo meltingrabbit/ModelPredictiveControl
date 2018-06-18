@@ -1,7 +1,9 @@
-function u = MPC(x, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
+function [u, x1_hat] = MPC(x, x_hat, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
 	% モデル予測制御
 	% u 		: 次のステップの出力					: NU
+	% x1_hat 	: 状態変数（次ステップの予想）			: NX
 	% x 		: 状態変数								: NX
+	% x_hat 	: 状態変数（前ステップの予想）			: NX
 	% u0 		: 1ステップ前の入力						: NU
 	% A 		: 離散化 状態方程式						: NX x NX
 	% B 		: 離散化 状態方程式						: NX x NU
@@ -15,6 +17,8 @@ function u = MPC(x, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
 	% x_max		: 制約条件								: NX
 	% u_min		: 制約条件								: NU
 	% u_max		: 制約条件								: NU
+
+	% ステップ予想（_hat）はoffsetをなくすために導入．cf.23
 
 
 	% ######################################################
@@ -74,6 +78,24 @@ function u = MPC(x, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
 	%% 参照軌道からの残渣，追従誤差
 	cT = repmat(r, Hp, 1);
 	cE = cT - Psi*x - Ups*u0;					% ε．p.91 (3.6)
+	% offset誤差を除く cf. p.23
+	% Ver.1
+	% cE = cE - repmat((x - x_hat), Hp, 1);
+	% Ver.2
+	% d = (x - x_hat);
+	% for i = 1:Hp
+	% 	cE((i-1)*NX+1:(i-1)*NX+NX,1) = cE((i-1)*NX+1:(i-1)*NX+NX,1) - d.*i;
+	% 	% tmp((i-1)*NX+1:(i-1)*NX+NX) = - d.*i;
+	% end
+	% Ver.3
+	% temp 				: NX*Hp x NX
+	d = (x - x_hat);
+	temp = zeros(NX*Hp, NX);
+	temp(1:NX,:) = eye(NX);
+	temp(NX+1:NX*Hp,:) = Psi(1:NX*(Hp-1),:);
+	cE = cE - temp * d;
+
+
 
 	cG = 2 * Theta.' * cQ * cE;					% G p.91 (3.11)
 	cH = 2 * (Theta.' * cQ * Theta + cR);		% 2*H p.91 (3.12)
@@ -91,7 +113,8 @@ function u = MPC(x, u0, A, B, r, Hp, Hu, Q, Qf, R, x_min, x_max, u_min, u_max)
 	dU = quadprog(cH, -cG.', Omega, omega, [], [], [], [], [], opts);
 	du = dU(1:NU,1);
 
-	u = u0 + du;
+	u      = u0 + du;
+	x1_hat = A*x + B*u;
 	% u = zeros(NU, 1);
 end
 
